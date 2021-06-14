@@ -60,7 +60,7 @@
 	url = https://github.com/astaxie/beego.git
 [submodule "rawdata/iikira/BaiduPCS-Go"]
 	path = projects/iikira/BaiduPCS-Go
-	url = https://github.com/iikira/BaiduPCS-Go.git
+	url = https://github.com/felixonmars/BaiduPCS-Go.git
 [submodule "rawdata/pingcap/tidb"]
 	path = projects/pingcap/tidb
 	url = https://github.com/pingcap/tidb.git
