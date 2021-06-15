@@ -28,6 +28,13 @@ type ProjectData struct {
 	RootModule     string   `csv:"project_root_module"`
 }
 
+type CFGQuery struct {
+	ProjectName   string    `csv:"project_name"`
+	PackageName   string    `csv:"package_name"`
+	FileName      string    `csv:"file_name"`
+	LineNumber    int       `csv:"line_number"`
+}
+
 type PackageData struct {
 	Name            string `csv:"name"`
 	ImportPath      string `csv:"import_path"`
