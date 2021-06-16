@@ -22,6 +22,9 @@ func geigerPackages(project *base.ProjectData, pkgs []*base.PackageData, fileToL
 		paths = append(paths, pkg.ImportPath)
 	}
 
+	fmt.Println(paths)
+	fmt.Println(project)
+
 	parsedPkgs, err := packages.Load(&packages.Config{
 		Mode:       packages.NeedImports | packages.NeedDeps | packages.NeedSyntax |
 					packages.NeedFiles | packages.NeedName | packages.NeedTypes,
@@ -29,6 +32,7 @@ func geigerPackages(project *base.ProjectData, pkgs []*base.PackageData, fileToL
 		Dir:		project.CheckoutPath,
 	}, paths...)
 	if err != nil {
+		fmt.Println(err)
 		panic("error loading packages")
 	}
 

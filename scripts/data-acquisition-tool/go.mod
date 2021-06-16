@@ -13,4 +13,5 @@ require (
 	golang.org/x/sys v0.0.0-20200413165638-669c56c373c4 // indirect
 	golang.org/x/tools v0.0.0-20200708003708-134513de8882
 	gopkg.in/yaml.v2 v2.2.8 // indirect
+	github.com/godoctor/godoctor v0.0.0-20200702010311-8433dcb3dc61
 )

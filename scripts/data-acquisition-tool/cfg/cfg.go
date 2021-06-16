@@ -1,20 +1,71 @@
 package cfg
 
 import (
+	"os"
+	"io"
 	"fmt"
-	"github.com/stg-tud/unsafe_go_study_results/scripts/data-acquisition-tool/base"
-	"golang.org/x/tools/go/packages"
-	"golang.org/x/tools/go/cfg"
 	"go/ast"
+	"go/token"
 	"strings"
+	"go/format"
+	"encoding/json"
+	"golang.org/x/tools/go/packages"
+	"github.com/godoctor/godoctor/analysis/cfg"
+	// "github.com/godoctor/godoctor/analysis/dataflow"
+	"github.com/stg-tud/unsafe_go_study_results/scripts/data-acquisition-tool/base"
 )
 
-func mayReturn(block *ast.CallExpr) bool {
-	return true
+func printCFG(f io.Writer, c *cfg.CFG, fset *token.FileSet) {
+	blocks := c.Blocks()
+	c.Sort(blocks)
+	blockToId := make(map[ast.Stmt]int, len(blocks))
+	cfgBlocks := make([]base.CFGBlock, 0, len(blocks))
+	edges := make([][2]int, 0, len(blocks))
+	for i, block := range blocks {
+		blockToId[block] = i
+		var blockStr string
+		var line int
+		switch block {
+		case c.Entry:
+			blockStr = "<entry>"
+			line = -1
+		case c.Exit:
+			blockStr = "<exit>"
+			line = -1
+		default:
+			var sb strings.Builder
+			format.Node(&sb, fset, block)
+			blockStr = sb.String()
+			blockPos := fset.File(block.Pos()).Position(block.Pos())
+			line = blockPos.Line
+		}
+
+		cfgBlocks = append(cfgBlocks, base.CFGBlock{
+			Code: blockStr,
+			LineNumber: line,
+		})
+	}
+	for i, block := range blocks {
+		succs := c.Succs(block)
+		c.Sort(succs)
+		for _, succ := range succs {
+			j := blockToId[succ]
+			edges = append(edges, [2]int{i, j})
+		}
+	}
+
+	b, err := json.Marshal(base.CFG{
+		Blocks: cfgBlocks,
+		Edges: edges,
+	})
+	if err != nil {
+		panic("Could not encode CFG as JSON.")
+	}
+	f.Write(b)
 }
 
 func GetCFG(query *base.CFGQuery, projectsDir string)  {
-	fmt.Printf("Loading CFG for %s in %s at %s:%d...\n", query.PackageName, query.ProjectName, query.FileName, query.LineNumber)
+	// fmt.Fprintf(os.Stderr, "Loading CFG for %s in %s at %s:%d...\n", query.PackageName, query.ProjectName, query.FileName, query.LineNumber)
 	checkoutDir := fmt.Sprintf("%s/%s", projectsDir, query.ProjectName)
 
 	parsedPkgs, err := packages.Load(&packages.Config{
@@ -24,7 +75,7 @@ func GetCFG(query *base.CFGQuery, projectsDir string)  {
 		Dir:		checkoutDir,
 	}, query.PackageName)
 	if err != nil {
-		fmt.Println(err)
+		println(err)
 		panic("error loading packages")
 	}
 
@@ -50,17 +101,11 @@ func GetCFG(query *base.CFGQuery, projectsDir string)  {
 				if selectedDecl == nil {
 					panic("Queried function declaration not found.")
 				}
-				fmt.Println(selectedDecl.Name)
-				graph := cfg.New(selectedDecl.Body, mayReturn)
-				// for i, block := range graph.Blocks {
-				// 	for j, node := range block.Nodes {
-				// 		fmt.Println(i, j, node)
-				// 	}
-				// }
-				fmt.Println(graph.Format(parsedPkg.Fset))
+				graph := cfg.FromFunc(selectedDecl)
+				printCFG(os.Stdout, graph, parsedPkg.Fset)
+				break
 			}
 		}
 	}
-
-	fmt.Println("Done.")
+	fmt.Println()
 }

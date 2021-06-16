@@ -35,6 +35,28 @@ type CFGQuery struct {
 	LineNumber    int       `csv:"line_number"`
 }
 
+type Edge struct {
+	From          int       `json:""`
+	To            int       `json:""`
+}
+
+type CFGVar struct {
+	Name          string    `json:"name"`
+}
+
+type CFGBlock struct {
+	Code          string    `json:"code"`
+	LineNumber    int       `json:"line_number"`
+	InVars        []int     `json:"in_vars"`
+	OutVars       []int     `json:"out_vars"`
+}
+
+type CFG struct {
+	Variables    []CFGVar   `json:"variables"`
+	Blocks       []CFGBlock `json:"blocks"`
+	Edges        [][2]int   `json:"edges"`
+}
+
 type PackageData struct {
 	Name            string `csv:"name"`
 	ImportPath      string `csv:"import_path"`
