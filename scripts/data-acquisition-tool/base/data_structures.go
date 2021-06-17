@@ -40,21 +40,42 @@ type Edge struct {
 	To            int       `json:""`
 }
 
+type CFGPkg struct {
+	Name        string      `json:"name"`
+	Path        string      `json:"path"`
+}
+
+type CFGType struct {
+	Name         string     `json:"name"`
+	Underlying   int        `json:"underlying"`
+}
+
 type CFGVar struct {
-	Name          string    `json:"name"`
+	Name         string     `json:"name"`
+	Pkg          int        `json:"package"`
+	Type         int        `json:"type"`
 }
 
 type CFGBlock struct {
-	Code          string    `json:"code"`
-	LineNumber    int       `json:"line_number"`
-	InVars        []int     `json:"in_vars"`
-	OutVars       []int     `json:"out_vars"`
+	Code        string      `json:"code"`
+	Ast         interface{} `json:"ast"`
+	LineNumber  int         `json:"line_number"`
+	InVars      []int       `json:"in_vars"`
+	OutVars     []int       `json:"out_vars"`
+	UseVars     []int       `json:"use_vars"`
+	DeclVars    []int       `json:"decl_vars"`
+	AssignVars  []int       `json:"assign_vars"`
+	UpdateVars  []int       `json:"update_vars"`
+	Succs       []int       `json:"successors"`
+	Entry       bool        `json:"entry"`
+	Exit        bool        `json:"exit"`
 }
 
 type CFG struct {
+	Pkgs         []CFGPkg   `json:"pkgs"`
+	Types        []CFGType  `json:"types"`
 	Variables    []CFGVar   `json:"variables"`
 	Blocks       []CFGBlock `json:"blocks"`
-	Edges        [][2]int   `json:"edges"`
 }
 
 type PackageData struct {
