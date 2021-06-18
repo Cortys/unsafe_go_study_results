@@ -10,6 +10,7 @@ var projectsDir string
 var projectName string
 var packageName string
 var fileName string
+var snippet string
 var lineNumber int
 
 var GetCFGCmd = &cobra.Command{
@@ -21,6 +22,7 @@ var GetCFGCmd = &cobra.Command{
 			ProjectName: projectName,
 			PackageName: packageName,
 			FileName: fileName,
+			Snippet: snippet,
 			LineNumber: lineNumber,
 		}, projectsDir)
 	},
@@ -33,5 +35,6 @@ func init() {
 	GetCFGCmd.Flags().StringVar(&projectName, "project", "", "Project name")
 	GetCFGCmd.Flags().StringVar(&packageName, "package", "", "Package name")
 	GetCFGCmd.Flags().StringVar(&fileName, "file", "", "File name")
+	GetCFGCmd.Flags().StringVar(&snippet, "snippet", "", "Snippet line")
 	GetCFGCmd.Flags().IntVar(&lineNumber, "line", -1, "Line number")
 }

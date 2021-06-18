@@ -32,6 +32,7 @@ type CFGQuery struct {
 	ProjectName   string    `csv:"project_name"`
 	PackageName   string    `csv:"package_name"`
 	FileName      string    `csv:"file_name"`
+	Snippet       string    `csv:"snippet"`
 	LineNumber    int       `csv:"line_number"`
 }
 
@@ -72,6 +73,7 @@ type CFGBlock struct {
 }
 
 type CFG struct {
+	Code         string     `json:"code"`
 	Pkgs         []CFGPkg   `json:"pkgs"`
 	Types        []CFGType  `json:"types"`
 	Variables    []CFGVar   `json:"variables"`
