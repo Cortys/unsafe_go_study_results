@@ -9,12 +9,13 @@ import (
 	"go/types"
 	"strings"
 	"go/format"
+	"go/token"
 	"encoding/json"
 	"golang.org/x/tools/go/loader"
 	"golang.org/x/tools/go/packages"
 	"github.com/godoctor/godoctor/analysis/cfg"
 	"github.com/godoctor/godoctor/analysis/dataflow"
-	"github.com/GaloisInc/goblin"
+	"github.com/Cortys/goblin"
 	"github.com/stg-tud/unsafe_go_study_results/scripts/data-acquisition-tool/base"
 )
 
@@ -74,6 +75,25 @@ func varsToJSON(vars []*types.Var) ([]base.CFGVar, []base.CFGType, []base.CFGPkg
 	}
 
 	return cvars, ctypes, cpkgs
+}
+
+func makeBlockAst(block ast.Stmt, fset *token.FileSet) interface{} {
+	switch b := block.(type) {
+	case *ast.LabeledStmt:
+		return goblin.DumpStmt(b.Stmt, fset)
+	case *ast.IfStmt:
+		blockAst := goblin.DumpStmt(b, fset).(map[string]interface{})
+		delete(blockAst, "body")
+		delete(blockAst, "else")
+		return blockAst
+	case *ast.ForStmt, *ast.RangeStmt,
+		*ast.SwitchStmt, *ast.TypeSwitchStmt, *ast.SelectStmt:
+		blockAst := goblin.DumpStmt(b, fset).(map[string]interface{})
+		delete(blockAst, "body")
+		return blockAst
+	default:
+		return goblin.DumpStmt(b, fset)
+	}
 }
 
 func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
@@ -137,7 +157,7 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 				blockStr = sb.String()
 				blockPos := fset.File(block.Pos()).Position(block.Pos())
 				line = blockPos.Line
-				blockAst = goblin.DumpStmt(block, fset)
+				blockAst = makeBlockAst(block, fset)
 			}
 			inVars := inVarMap[block]
 			outVars := outVarMap[block]
