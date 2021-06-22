@@ -7,6 +7,8 @@ github.com/Cortys/goblin v0.3.4-0.20210621145322-9d4012b1d63d h1:USco0TZq0e2eSt6
 github.com/Cortys/goblin v0.3.4-0.20210621145322-9d4012b1d63d/go.mod h1:kEtPp6udymaMEgBQ26YvZLDCSHJ3kK1D1uHCbcaJmAc=
 github.com/Cortys/goblin v0.3.4-0.20210621155332-b60b3c124905 h1:7LNjdv94O9Eu+kH9rVQb6hhhFKeIwANpnMBmEHjfX3o=
 github.com/Cortys/goblin v0.3.4-0.20210621155332-b60b3c124905/go.mod h1:kEtPp6udymaMEgBQ26YvZLDCSHJ3kK1D1uHCbcaJmAc=
+github.com/Cortys/goblin v0.3.4-0.20210622120216-93e8f4b26221 h1:YWXpc4aldu/OuGh+cVZpLcgkhnu+t4vIvZq81yA9yNQ=
+github.com/Cortys/goblin v0.3.4-0.20210622120216-93e8f4b26221/go.mod h1:kEtPp6udymaMEgBQ26YvZLDCSHJ3kK1D1uHCbcaJmAc=
 github.com/OneOfOne/xxhash v1.2.2 h1:KMrpdQIwFcEqXDklaen+P1axHaj9BSKzvpUUfnHldSE=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/alcortesm/tgz v0.0.0-20161220082320-9c5fe88206d7 h1:uSoVVbwJiQipAclBbw+8quDsfcvFjOpI5iCf4p/cqCs=
