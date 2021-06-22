@@ -25,6 +25,16 @@ func Min(x, y int) int {
 	return x
 }
 
+
+func IntervalDistance(x, a, b int) int {
+	if x < a {
+		return a - x
+	} else if x > b {
+		return x - b
+	}
+	return 0
+}
+
 func GetRegistryFromImportPath(importPath string) string {
 	pathComponents := strings.Split(importPath, "/")
 
@@ -47,7 +57,7 @@ func copyFiles(files map[string]string, copyDestination string) {
 
 	for srcFilename, destFilename := range files {
 		fullDestFilename := fmt.Sprintf("%s/%s", copyDestination, destFilename)
-		
+
 		src, err := os.Open(srcFilename)
 		if err != nil {
 			_ = WriteErrorCondition(ErrorConditionData{
