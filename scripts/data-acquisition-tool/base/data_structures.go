@@ -34,6 +34,8 @@ type CFGQuery struct {
 	FileName      string    `csv:"file_name"`
 	Snippet       string    `csv:"snippet"`
 	LineNumber    int       `csv:"line_number"`
+	MaxDist       int       `csv:"max_dist"`
+	MaxCacheDist  int       `csv:"max_cache_dist"`
 }
 
 type Edge struct {

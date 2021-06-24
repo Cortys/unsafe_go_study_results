@@ -12,6 +12,8 @@ var packageName string
 var fileName string
 var snippet string
 var lineNumber int
+var maxDist int
+var maxCacheDist int
 
 var GetCFGCmd = &cobra.Command{
 	Use:   "cfg",
@@ -24,6 +26,8 @@ var GetCFGCmd = &cobra.Command{
 			FileName: fileName,
 			Snippet: snippet,
 			LineNumber: lineNumber,
+			MaxDist: maxDist,
+			MaxCacheDist: maxCacheDist,
 		}, projectsDir)
 	},
 }
@@ -37,4 +41,6 @@ func init() {
 	GetCFGCmd.Flags().StringVar(&fileName, "file", "", "File name")
 	GetCFGCmd.Flags().StringVar(&snippet, "snippet", "", "Snippet line")
 	GetCFGCmd.Flags().IntVar(&lineNumber, "line", -1, "Line number")
+	GetCFGCmd.Flags().IntVar(&maxDist, "dist", 0, "Max match distance")
+	GetCFGCmd.Flags().IntVar(&maxCacheDist, "cacheDist", 0, "Max cache match distance")
 }

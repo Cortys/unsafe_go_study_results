@@ -304,11 +304,11 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 	switch cdecl := decl.(type) {
 	case *ast.FuncDecl:
 		ft := cdecl.Type
-		params := ft.Params.List
-		results := ft.Results.List
+		params := ft.Params
+		results := ft.Results
 		receivers := cdecl.Recv
 
-		if receivers != nil {
+		if receivers != nil && receivers.List != nil {
 			for i, recv := range receivers.List {
 				rName := fmt.Sprintf("[rec%d]", i)
 				for _, v := range fieldToVars(rName, recv, pkgInfo) {
@@ -316,17 +316,20 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 				}
 			}
 		}
-
-		for i, param := range params {
-			pName := fmt.Sprintf("[param%d]", i)
-			for _, v := range fieldToVars(pName, param, pkgInfo) {
-				paramIds = append(paramIds, vLookup(v))
+		if params != nil && params.List != nil {
+			for i, param := range params.List {
+				pName := fmt.Sprintf("[param%d]", i)
+				for _, v := range fieldToVars(pName, param, pkgInfo) {
+					paramIds = append(paramIds, vLookup(v))
+				}
 			}
 		}
-		for i, res := range results {
-			rName := fmt.Sprintf("[res%d]", i)
-			for _, v := range fieldToVars(rName, res, pkgInfo) {
-				resultIds = append(resultIds, vLookup(v))
+		if results != nil && results.List != nil {
+			for i, res := range results.List {
+				rName := fmt.Sprintf("[res%d]", i)
+				for _, v := range fieldToVars(rName, res, pkgInfo) {
+					resultIds = append(resultIds, vLookup(v))
+				}
 			}
 		}
 
@@ -531,9 +534,6 @@ func declCode(code string, decl ast.Decl, fset *token.FileSet) string {
 	return code[startOffset:endOffset]
 }
 
-const MAX_DIST = 3
-const CACHE_MAX_DIST = 20
-
 func GetCFG(query *base.CFGQuery, projectsDir string)  {
 	// fmt.Fprintf(
 	// 	os.Stderr, "Loading CFG for %s in %s at %s:%d (%s)...\n",
@@ -586,6 +586,7 @@ func GetCFG(query *base.CFGQuery, projectsDir string)  {
 	var selectedPkg *packages.Package
 	var selectedFile *ast.File
 	var selectedDecl ast.Decl
+	var selectedName string
 
 	for _, parsedPkg := range parsedPkgs {
 		for i, file := range parsedPkg.Syntax {
@@ -596,27 +597,26 @@ func GetCFG(query *base.CFGQuery, projectsDir string)  {
 			if strings.HasSuffix(name, query.FileName) {
 				selectedPkg = parsedPkg
 				selectedFile = file
-				selectedDecl = selectDecl(selectedPkg, selectedFile, query.LineNumber, nil, -1)
+				selectedName = name
+				if b, err := ioutil.ReadFile(name); err == nil {
+					code := string(b)
+					decl := selectDecl(selectedPkg, selectedFile, query.LineNumber, nil, -1)
 
-				// Fuzzy matching to handle small line-number discrepancies:
-				if selectedDecl == nil {
-					b, err := ioutil.ReadFile(name)
-					if err == nil {
-						code := string(b)
+					// Fuzzy matching to handle small line-number discrepancies:
+					if decl == nil && query.MaxDist > 0 {
 						snippetMatches := snippetRegex.FindAllStringIndex(code, -1)
 						if snippetMatches != nil {
-							decl := selectDecl(selectedPkg, selectedFile, query.LineNumber, snippetMatches, MAX_DIST)
-							if decl != nil {
-								codeSlice := declCode(code, decl, parsedPkg.Fset)
-								if strings.Contains(codeSlice, query.Snippet) {
-									selectedDecl = decl
-									break
-								}
-							}
+							decl = selectDecl(selectedPkg, selectedFile, query.LineNumber, snippetMatches, query.MaxDist)
 						}
 					}
-				} else {
-					break
+
+					if decl != nil {
+						codeSlice := declCode(code, decl, parsedPkg.Fset)
+						if strings.Contains(codeSlice, query.Snippet) {
+							selectedDecl = decl
+							break
+						}
+					}
 				}
 			}
 		}
@@ -639,7 +639,8 @@ func GetCFG(query *base.CFGQuery, projectsDir string)  {
 						if snippetMatches != nil {
 							selectedPkg = parsedPkg
 							selectedFile = file
-							decl := selectDecl(selectedPkg, selectedFile, query.LineNumber, snippetMatches, CACHE_MAX_DIST)
+							selectedName = name
+							decl := selectDecl(selectedPkg, selectedFile, query.LineNumber, snippetMatches, query.MaxCacheDist)
 							if decl != nil {
 								codeSlice := declCode(code, decl, parsedPkg.Fset)
 								if strings.Contains(codeSlice, query.Snippet) {
@@ -658,6 +659,7 @@ func GetCFG(query *base.CFGQuery, projectsDir string)  {
 	}
 
 	if selectedDecl == nil {
+		println("Selected file name:", selectedName)
 		panic("Queried function declaration not found.")
 	}
 
