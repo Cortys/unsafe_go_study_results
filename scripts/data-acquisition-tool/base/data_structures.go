@@ -67,20 +67,25 @@ type CFGFunc struct {
 type CFGBlock struct {
 	Code        string      `json:"code"`
 	Ast         interface{} `json:"ast"`
-	LineNumber  int         `json:"line_number"`
-	InVars      []int       `json:"in_vars"`
-	OutVars     []int       `json:"out_vars"`
-	UseVars     []int       `json:"use_vars"`
-	DeclVars    []int       `json:"decl_vars"`
-	AssignVars  []int       `json:"assign_vars"`
-	UpdateVars  []int       `json:"update_vars"`
+	LineStart   int         `json:"line-start"`
+	LineEnd     int         `json:"line-end"`
+	InVars      []int       `json:"in-vars"`
+	OutVars     []int       `json:"out-vars"`
+	UseVars     []int       `json:"use-vars"`
+	DeclVars    []int       `json:"decl-vars"`
+	AssignVars  []int       `json:"assign-vars"`
+	UpdateVars  []int       `json:"update-vars"`
 	Succs       []int       `json:"successors"`
 	Entry       bool        `json:"entry"`
 	Exit        bool        `json:"exit"`
 }
 
 type CFG struct {
+	Names        []string   `json:"name"`
 	Code         string     `json:"code"`
+	Pkg          int        `json:"package"`
+	LineStart    int        `json:"line-start"`
+	LineEnd      int        `json:"line-end"`
 	Type         string     `json:"type"`
 	Pkgs         []CFGPkg   `json:"packages"`
 	Types        []CFGType  `json:"types"`

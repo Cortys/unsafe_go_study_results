@@ -86,7 +86,7 @@ func lookupType(lut *CFGLookup, ctypes []base.CFGType, typeMap map[string]int, t
 						"type": mtyp,
 					}
 				}
-				ctyp["type"] = methods
+				ctyp["methods"] = methods
 			case *types.Map:
 				ctyp["type"] = "Map"
 				ctypes, elemId = lookupType(lut, ctypes, typeMap, t.Elem())
@@ -300,9 +300,17 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 	recvIds := make([]int, 0)
 	paramIds := make([]int, 0)
 	resultIds := make([]int, 0)
+	cfgNames := make([]string, 0)
+	cfgPkg := -1
 
 	switch cdecl := decl.(type) {
 	case *ast.FuncDecl:
+		id := cdecl.Name
+		cfgNames = append(cfgNames, id.String())
+		if obj := pkg.TypesInfo.ObjectOf(id); obj != nil {
+			cfgPkg = pLookup(obj.Pkg())
+		}
+
 		ft := cdecl.Type
 		params := ft.Params
 		results := ft.Results
@@ -342,7 +350,8 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 				Code: "entry",
 				Entry: true,
 				Exit: false,
-				LineNumber: -1,
+				LineStart: -1,
+				LineEnd: -1,
 				InVars: paramIds,
 				OutVars: paramIds,
 				UseVars: []int{},
@@ -354,7 +363,8 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 				Code: "exit",
 				Entry: false,
 				Exit: true,
-				LineNumber: -1,
+				LineStart: -1,
+				LineEnd: -1,
 				UseVars: []int{},
 				DeclVars: []int{},
 				AssignVars: []int{},
@@ -363,7 +373,45 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 			}}
 		}
 	case *ast.GenDecl:
-		cfgType = "generic"
+		switch cdecl.Tok {
+		case token.IMPORT:
+			cfgType = "import"
+			for _, s := range cdecl.Specs {
+				if id := s.(*ast.ImportSpec).Name; id != nil {
+					cfgNames = append(cfgNames, id.Name)
+					if cfgPkg == -1 {
+						if obj := pkg.TypesInfo.ObjectOf(id); obj != nil {
+							cfgPkg = pLookup(obj.Pkg())
+						}
+					}
+				}
+			}
+		case token.TYPE:
+			cfgType = "type"
+			for _, s := range cdecl.Specs {
+				id := s.(*ast.TypeSpec).Name
+				cfgNames = append(cfgNames, id.Name)
+				if cfgPkg == -1 {
+					if obj := pkg.TypesInfo.ObjectOf(id); obj != nil {
+						cfgPkg = pLookup(obj.Pkg())
+					}
+				}
+			}
+		case token.VAR, token.CONST:
+			cfgType = "variable"
+			for _, s := range cdecl.Specs {
+				for _, id := range s.(*ast.ValueSpec).Names {
+					cfgNames = append(cfgNames, id.Name)
+					if cfgPkg == -1 {
+						if obj := pkg.TypesInfo.ObjectOf(id); obj != nil {
+							cfgPkg = pLookup(obj.Pkg())
+						}
+					}
+				}
+			}
+		default:
+			cfgType = "generic"
+		}
 		declStmt := ast.DeclStmt{Decl: cdecl}
 		c = cfg.FromStmts([]ast.Stmt{&declStmt})
 	default:
@@ -380,7 +428,7 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 		for i, block := range blocks {
 			blockToId[block] = i
 			var blockStr string
-			var line int
+			var lineStart, lineEnd int
 			var blockAst interface{}
 			entry := false
 			exit := false
@@ -388,15 +436,17 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 			case c.Entry:
 				blockStr = "entry"
 				entry = true
-				line = -1
+				lineStart, lineEnd = -1, -1
 			case c.Exit:
 				blockStr = "exit"
 				exit = true
-				line = -1
+				lineStart, lineEnd = -1, -1
 			default:
 				blockStr = nodeToString(block, fset)
 				blockPos := fset.File(block.Pos()).Position(block.Pos())
-				line = blockPos.Line
+				blockEnd := fset.File(block.End()).Position(block.End())
+				lineStart = blockPos.Line
+				lineEnd = blockEnd.Line
 				blockAst = makeBlockAst(block, fset, c)
 			}
 			inVars := inVarMap[block]
@@ -432,7 +482,8 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 			cfgBlocks = append(cfgBlocks, base.CFGBlock{
 				Code: blockStr,
 				Ast: blockAst,
-				LineNumber: line,
+				LineStart: lineStart,
+				LineEnd: lineEnd,
 				Entry: entry,
 				Exit: exit,
 				InVars: inIds,
@@ -457,10 +508,16 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 	var sb strings.Builder
 	format.Node(&sb, fset, decl)
 	cfgCode := sb.String()
+	declPos := fset.File(decl.Pos()).Position(decl.Pos())
+	declEnd := fset.File(decl.End()).Position(decl.End())
 
 	b, err := json.Marshal(base.CFG{
+		Names: cfgNames,
 		Type: cfgType,
+		Pkg: cfgPkg,
 		Code: cfgCode,
+		LineStart: declPos.Line,
+		LineEnd: declEnd.Line,
 		Blocks: cfgBlocks,
 		Variables: cvars,
 		Types: ctypes,
