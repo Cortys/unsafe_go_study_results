@@ -62,7 +62,7 @@
                                 "Creating CFG for" source))
               args [binary "cfg" "--base" projects "--project" project
                     "--package" pkg "--file" file "--line" (str line)
-                    "--dist" "0" "--cacheDist" "0" "--snippet" snippet]
+                    "--dist" "0" "--cacheDist" "3" "--snippet" snippet]
               {:keys [out exit]}
               (sh/with-sh-env env (apply sh/sh args))
               cfg (when (zero? exit) (cs/parse-string out true))
