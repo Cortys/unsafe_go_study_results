@@ -46,15 +46,20 @@ type CFGPkg struct {
 	Path        string      `json:"path"`
 }
 
-type CFGType struct {
-	Name         string     `json:"name"`
-	Underlying   int        `json:"underlying"`
-}
+type CFGType map[string]interface{}
 
 type CFGVar struct {
 	Name         string     `json:"name"`
 	Pkg          int        `json:"package"`
 	Type         int        `json:"type"`
+	Exported     bool       `json:"exported"`
+}
+
+type CFGFunc struct {
+	Name         string     `json:"name"`
+	Pkg          int        `json:"package"`
+	Type         int        `json:"type"`
+	Exported     bool       `json:"exported"`
 }
 
 type CFGBlock struct {
@@ -74,10 +79,15 @@ type CFGBlock struct {
 
 type CFG struct {
 	Code         string     `json:"code"`
-	Pkgs         []CFGPkg   `json:"pkgs"`
+	Type         string     `json:"type"`
+	Pkgs         []CFGPkg   `json:"packages"`
 	Types        []CFGType  `json:"types"`
 	Variables    []CFGVar   `json:"variables"`
+	Funcs        []CFGFunc  `json:"functions"`
 	Blocks       []CFGBlock `json:"blocks"`
+	Params       []int      `json:"params"`
+	Results      []int      `json:"results"`
+	Receivers    []int      `json:"receivers"`
 }
 
 type PackageData struct {

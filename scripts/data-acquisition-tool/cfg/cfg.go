@@ -22,7 +22,14 @@ import (
 	"github.com/stg-tud/unsafe_go_study_results/scripts/data-acquisition-tool/base"
 )
 
-func lookupPkg(pkgs []base.CFGPkg, pkgMap map[*types.Package]int, pkg *types.Package) ([]base.CFGPkg, int) {
+type CFGLookup struct {
+	Pkg func(*types.Package) int
+	Type func(types.Type) int
+	Var func(*types.Var) int
+	Func func(*types.Func) int
+}
+
+func lookupPkg(lut *CFGLookup, pkgs []base.CFGPkg, pkgMap map[*types.Package]int, pkg *types.Package) ([]base.CFGPkg, int) {
 	var pkgId int = -1
 	if pkg != nil {
 		var ok bool
@@ -39,45 +46,148 @@ func lookupPkg(pkgs []base.CFGPkg, pkgMap map[*types.Package]int, pkg *types.Pac
 	return pkgs, pkgId
 }
 
-func lookupType(types []base.CFGType, typeMap map[string]int, typ types.Type) ([]base.CFGType, int) {
+func lookupType(lut *CFGLookup, ctypes []base.CFGType, typeMap map[string]int, typ types.Type) ([]base.CFGType, int) {
 	var typeId int = -1
 	if typ != nil {
 		ts := typ.String()
 		var ok bool
 		typeId, ok = typeMap[ts]
 		if !ok {
-			var underId int
-			typeId = len(types)
+			var underId, elemId int
+			typeId = len(ctypes)
 			typeMap[ts] = typeId
-			types = append(types, base.CFGType{
-				Name: ts,
-			})
-			types, underId = lookupType(types, typeMap, typ.Underlying())
-			types[typeId].Underlying = underId
+			ctyp := base.CFGType{}
+			ctypes = append(ctypes, ctyp)
+			switch t := typ.(type) {
+			case *types.Array:
+				ctyp["type"] = "Array"
+				ctypes, elemId = lookupType(lut, ctypes, typeMap, t.Elem())
+				ctyp["elem"] = elemId
+			case *types.Basic:
+				ctyp["type"] = "Basic"
+				if t.Kind() == types.UnsafePointer {
+					ctyp["local-name"] = "Pointer"
+					ctyp["package"] = lut.Pkg(types.Unsafe)
+				}
+			case *types.Chan:
+				ctyp["type"] = "Chan"
+				ctypes, elemId = lookupType(lut, ctypes, typeMap, t.Elem())
+				ctyp["elem"] = elemId
+				ctyp["dir"] = goblin.DumpChanDir(goblin.ConvertChanDir(t.Dir()))
+			case *types.Interface:
+				ctyp["type"] = "Interface"
+				methods := make([]map[string]interface{}, t.NumMethods())
+				for i := 0; i < t.NumMethods(); i++ {
+					m := t.Method(i)
+					var mtyp int
+					ctypes, mtyp = lookupType(lut, ctypes, typeMap, m.Type())
+					methods[i] = map[string]interface{}{
+						"name": m.Name(),
+						"type": mtyp,
+					}
+				}
+				ctyp["type"] = methods
+			case *types.Map:
+				ctyp["type"] = "Map"
+				ctypes, elemId = lookupType(lut, ctypes, typeMap, t.Elem())
+				ctyp["elem"] = elemId
+				ctypes, elemId = lookupType(lut, ctypes, typeMap, t.Key())
+				ctyp["key"] = elemId
+			case *types.Named:
+				ctyp["type"] = "Named"
+				if tname := t.Obj(); tname != nil {
+					ctyp["package"] = lut.Pkg(tname.Pkg())
+					ctyp["local-name"] = tname.Name()
+				}
+			case *types.Pointer:
+				ctyp["type"] = "Pointer"
+				ctypes, elemId = lookupType(lut, ctypes, typeMap, t.Elem())
+				ctyp["elem"] = elemId
+			case *types.Signature:
+				ctyp["type"] = "Signature"
+				var params, res int
+				ctypes, params = lookupType(lut, ctypes, typeMap, t.Params())
+				ctypes, res = lookupType(lut, ctypes, typeMap, t.Results())
+				ctyp["params"] = params
+				ctyp["recv"] = lut.Var(t.Recv())
+				ctyp["results"] = res
+				ctyp["variadic"] = t.Variadic()
+			case *types.Slice:
+				ctyp["type"] = "Slice"
+				ctypes, elemId = lookupType(lut, ctypes, typeMap, t.Elem())
+				ctyp["elem"] = elemId
+			case *types.Struct:
+				ctyp["type"] = "Struct"
+				fields := make([]map[string]interface{}, t.NumFields())
+				for i := 0; i < t.NumFields(); i++ {
+					f := t.Field(i)
+					var ftyp int
+					ctypes, ftyp = lookupType(lut, ctypes, typeMap, f.Type())
+					fields[i] = map[string]interface{}{
+						"name": f.Name(),
+						"type": ftyp,
+					}
+				}
+				ctyp["fields"] = fields
+			case *types.Tuple:
+				ctyp["type"] = "Tuple"
+				fields := make([]map[string]interface{}, t.Len())
+				for i := 0; i < t.Len(); i++ {
+					f := t.At(i)
+					var ftyp int
+					ctypes, ftyp = lookupType(lut, ctypes, typeMap, f.Type())
+					fields[i] = map[string]interface{}{
+						"name": f.Name(),
+						"type": ftyp,
+					}
+				}
+				ctyp["fields"] = fields
+			default:
+			}
+			ctyp["name"] = typ.String()
+			ctypes, underId = lookupType(lut, ctypes, typeMap, typ.Underlying())
+			ctyp["underlying"] = underId
 		}
 	}
-	return types, typeId
+	return ctypes, typeId
 }
 
-func varsToJSON(vars []*types.Var) ([]base.CFGVar, []base.CFGType, []base.CFGPkg) {
-	cvars := make([]base.CFGVar, len(vars))
-	ctypes := make([]base.CFGType, 0)
-	cpkgs := make([]base.CFGPkg, 0)
-	typeMap := make(map[string]int, 0)
-	pkgMap := make(map[*types.Package]int, 0)
-	for i, v := range vars {
-		var pkgId, typeId int
-		cpkgs, pkgId = lookupPkg(cpkgs, pkgMap, v.Pkg())
-		ctypes, typeId = lookupType(ctypes, typeMap, v.Type())
-
-		cvars[i] = base.CFGVar{
-			Name: v.Name(),
-			Pkg: pkgId,
-			Type: typeId,
+func lookupVar(lut *CFGLookup, vars []base.CFGVar, varMap map[*types.Var]int, v *types.Var) ([]base.CFGVar, int) {
+	var varId int = -1
+	if v != nil {
+		var ok bool
+		varId, ok = varMap[v]
+		if !ok {
+			vars = append(vars, base.CFGVar{
+				Name: v.Name(),
+				Pkg: lut.Pkg(v.Pkg()),
+				Type: lut.Type(v.Type()),
+				Exported: v.Exported(),
+			})
+			varId = len(vars) - 1
+			varMap[v] = varId
 		}
 	}
+	return vars, varId
+}
 
-	return cvars, ctypes, cpkgs
+func lookupFunc(lut *CFGLookup, funcs []base.CFGFunc, funcMap map[*types.Func]int, f *types.Func) ([]base.CFGFunc, int) {
+	var funcId int = -1
+	if f != nil {
+		var ok bool
+		funcId, ok = funcMap[f]
+		if !ok {
+			funcs = append(funcs, base.CFGFunc{
+				Name: f.Name(),
+				Pkg: lut.Pkg(f.Pkg()),
+				Type: lut.Type(f.Type()),
+				Exported: f.Exported(),
+			})
+			funcId = len(funcs) - 1
+			funcMap[f] = funcId
+		}
+	}
+	return funcs, funcId
 }
 
 func makeBlockAst(block ast.Stmt, fset *token.FileSet, c *cfg.CFG) interface{} {
@@ -120,6 +230,20 @@ func nodeToString(stmt ast.Node, fset *token.FileSet) string {
 	return sb.String()
 }
 
+func fieldToVars(defaultName string, field *ast.Field, info *loader.PackageInfo) []*types.Var {
+	t := info.Info.TypeOf(field.Type)
+	if field.Names == nil {
+		return []*types.Var{types.NewVar(field.Pos(), info.Pkg, defaultName, t)}
+	}
+	vars := make([]*types.Var, 0)
+	for _, id := range field.Names {
+		if v, ok := info.ObjectOf(id).(*types.Var); ok {
+			vars = append(vars, v)
+		}
+	}
+	return vars
+}
+
 func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 	pkgInfo := &loader.PackageInfo{
 		Pkg: pkg.Types,
@@ -128,28 +252,119 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 		Files: pkg.Syntax,
 		Info: *pkg.TypesInfo,
 	}
-	varMap := dataflow.Vars(decl, pkgInfo)
 	fset := pkg.Fset
-	vars := make([]*types.Var, 0, len(varMap))
-	varIds := make(map[*types.Var]int, len(varMap))
-	for v := range varMap {
-		varIds[v] = len(vars)
-		vars = append(vars, v)
+	cvars := make([]base.CFGVar, 0)
+	ctypes := make([]base.CFGType, 0)
+	cpkgs := make([]base.CFGPkg, 0)
+	cfuncs := make([]base.CFGFunc, 0)
+	varMap := make(map[*types.Var]int)
+	typeMap := make(map[string]int, 0)
+	pkgMap := make(map[*types.Package]int, 0)
+	funcMap := make(map[*types.Func]int, 0)
+	lookup := &CFGLookup{}
+
+	vLookup := func(v *types.Var) int {
+		cv, typeId := lookupVar(lookup, cvars, varMap, v)
+		cvars = cv
+		return typeId
 	}
-	v, t, p := varsToJSON(vars)
+	pLookup := func(pkg *types.Package) int {
+		cp, pkgId := lookupPkg(lookup, cpkgs, pkgMap, pkg)
+		cpkgs = cp
+		return pkgId
+	}
+	tLookup := func(typ types.Type) int {
+		ct, typeId := lookupType(lookup, ctypes, typeMap, typ)
+		ctypes = ct
+		return typeId
+	}
+	fLookup := func(f *types.Func) int {
+		cf, funcId := lookupFunc(lookup, cfuncs, funcMap, f)
+		cfuncs = cf
+		return funcId
+	}
+	lookup.Var = vLookup
+	lookup.Pkg = pLookup
+	lookup.Type = tLookup
+	lookup.Func = fLookup
+
+	goblin.SetTypesInfo(pkg.TypesInfo)
+	goblin.SetVarDumper(func(v *types.Var) interface{} {return vLookup(v)})
+	goblin.SetPkgDumper(func(pkg *types.Package) interface{} {return pLookup(pkg)})
+	goblin.SetTypeDumper(func(typ types.Type) interface{} {return tLookup(typ)})
+	goblin.SetFuncDumper(func(f *types.Func) interface{} {return fLookup(f)})
 
 	var c *cfg.CFG
+	var cfgType string
 	var cfgBlocks []base.CFGBlock
+	recvIds := make([]int, 0)
+	paramIds := make([]int, 0)
+	resultIds := make([]int, 0)
 
 	switch cdecl := decl.(type) {
 	case *ast.FuncDecl:
+		ft := cdecl.Type
+		params := ft.Params.List
+		results := ft.Results.List
+		receivers := cdecl.Recv
+
+		if receivers != nil {
+			for i, recv := range receivers.List {
+				rName := fmt.Sprintf("[rec%d]", i)
+				for _, v := range fieldToVars(rName, recv, pkgInfo) {
+					recvIds = append(recvIds, vLookup(v))
+				}
+			}
+		}
+
+		for i, param := range params {
+			pName := fmt.Sprintf("[param%d]", i)
+			for _, v := range fieldToVars(pName, param, pkgInfo) {
+				paramIds = append(paramIds, vLookup(v))
+			}
+		}
+		for i, res := range results {
+			rName := fmt.Sprintf("[res%d]", i)
+			for _, v := range fieldToVars(rName, res, pkgInfo) {
+				resultIds = append(resultIds, vLookup(v))
+			}
+		}
+
 		if cdecl.Body != nil {
+			cfgType = "function"
 			c = cfg.FromFunc(cdecl)
+		} else {
+			cfgType = "external"
+			cfgBlocks = []base.CFGBlock{{
+				Code: "entry",
+				Entry: true,
+				Exit: false,
+				LineNumber: -1,
+				InVars: paramIds,
+				OutVars: paramIds,
+				UseVars: []int{},
+				DeclVars: []int{},
+				AssignVars: []int{},
+				UpdateVars: []int{},
+				Succs: []int{1},
+			}, {
+				Code: "exit",
+				Entry: false,
+				Exit: true,
+				LineNumber: -1,
+				UseVars: []int{},
+				DeclVars: []int{},
+				AssignVars: []int{},
+				UpdateVars: []int{},
+				Succs: []int{},
+			}}
 		}
 	case *ast.GenDecl:
+		cfgType = "generic"
 		declStmt := ast.DeclStmt{Decl: cdecl}
 		c = cfg.FromStmts([]ast.Stmt{&declStmt})
 	default:
+		cfgType = "unknown"
 	}
 
 	if c != nil {
@@ -186,10 +401,10 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 			inIds := make([]int, 0, len(inVars))
 			outIds := make([]int, 0, len(outVars))
 			for v := range inVars {
-				inIds = append(inIds, varIds[v])
+				inIds = append(inIds, vLookup(v))
 			}
 			for v := range outVars {
-				outIds = append(outIds, varIds[v])
+				outIds = append(outIds, vLookup(v))
 			}
 
 			asVars, upVars, decVars, useVars := dataflow.ReferencedVars(
@@ -199,16 +414,16 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 			decIds := make([]int, 0, len(decVars))
 			useIds := make([]int, 0, len(useVars))
 			for v := range asVars {
-				asIds = append(asIds, varIds[v])
+				asIds = append(asIds, vLookup(v))
 			}
 			for v := range upVars {
-				upIds = append(upIds, varIds[v])
+				upIds = append(upIds, vLookup(v))
 			}
 			for v := range decVars {
-				decIds = append(decIds, varIds[v])
+				decIds = append(decIds, vLookup(v))
 			}
 			for v := range useVars {
-				useIds = append(useIds, varIds[v])
+				useIds = append(useIds, vLookup(v))
 			}
 
 			cfgBlocks = append(cfgBlocks, base.CFGBlock{
@@ -241,11 +456,16 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 	cfgCode := sb.String()
 
 	b, err := json.Marshal(base.CFG{
+		Type: cfgType,
 		Code: cfgCode,
 		Blocks: cfgBlocks,
-		Variables: v,
-		Types: t,
-		Pkgs: p,
+		Variables: cvars,
+		Types: ctypes,
+		Pkgs: cpkgs,
+		Funcs: cfuncs,
+		Receivers: recvIds,
+		Params: paramIds,
+		Results: resultIds,
 	})
 	if err != nil {
 		panic("Could not encode CFG as JSON.")
@@ -253,18 +473,21 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 	f.Write(b)
 }
 
-func selectDecl(selectedPkg *packages.Package, selectedFile *ast.File, lineNumber int, matches [][]int) ast.Decl {
+func selectDecl(selectedPkg *packages.Package, selectedFile *ast.File, lineNumber int, matches [][]int, maxDist int) ast.Decl {
+	decls := selectedFile.Decls
 	var selectedDecl ast.Decl
 	var matchesOffset int = 0
 	var selectedLineToDeclDist int = -1
 
-	for _, decl := range selectedFile.Decls {
+	for _, decl := range decls {
 		if _, ok := decl.(*ast.BadDecl); ok {
 			continue
 		}
 
 		declStart := selectedPkg.Fset.File(decl.Pos()).Position(decl.Pos())
 		declEnd := selectedPkg.Fset.File(decl.End()).Position(decl.End())
+
+		// fmt.Println(lineNumber, matches, declStart, declEnd)
 
 		if matches != nil {
 			lineToDeclDist := base.IntervalDistance(lineNumber, declStart.Line, declEnd.Line)
@@ -291,8 +514,25 @@ func selectDecl(selectedPkg *packages.Package, selectedFile *ast.File, lineNumbe
 			break
 		}
 	}
+
+	if maxDist > -1 && selectedLineToDeclDist > maxDist {
+		println("Dist:", selectedLineToDeclDist, maxDist, selectedFile.Name.String())
+		panic("Maximum fuzzy declaration distance exceeded.")
+	}
+
 	return selectedDecl
 }
+
+func declCode(code string, decl ast.Decl, fset *token.FileSet) string {
+	dStart := decl.Pos()
+	dEnd := decl.End()
+	startOffset := fset.File(dStart).Offset(dStart)
+	endOffset := fset.File(dEnd).Offset(dEnd)
+	return code[startOffset:endOffset]
+}
+
+const MAX_DIST = 3
+const CACHE_MAX_DIST = 20
 
 func GetCFG(query *base.CFGQuery, projectsDir string)  {
 	// fmt.Fprintf(
@@ -301,10 +541,15 @@ func GetCFG(query *base.CFGQuery, projectsDir string)  {
 	checkoutDir := fmt.Sprintf("%s/%s", projectsDir, query.ProjectName)
 	cgoFileMap := make(map[string]string)
 	lineRegex := regexp.MustCompile("(?m)^// ?line ([^:]+):")
+	snippetRegex := regexp.MustCompile(regexp.QuoteMeta(query.Snippet))
 	lock := sync.Mutex{}
 
 	query.FileName = strings.TrimPrefix(query.FileName, "/root/")
 	isCacheQuery := strings.HasPrefix(query.FileName, ".cache")
+
+	if !isCacheQuery {
+		query.FileName = "/" + query.FileName
+	}
 
 	noCgoParse := func(fset *token.FileSet, filename string, src []byte) (*ast.File, error) {
 		if !isCacheQuery {
@@ -351,8 +596,28 @@ func GetCFG(query *base.CFGQuery, projectsDir string)  {
 			if strings.HasSuffix(name, query.FileName) {
 				selectedPkg = parsedPkg
 				selectedFile = file
-				selectedDecl = selectDecl(selectedPkg, selectedFile, query.LineNumber, nil)
-				break
+				selectedDecl = selectDecl(selectedPkg, selectedFile, query.LineNumber, nil, -1)
+
+				// Fuzzy matching to handle small line-number discrepancies:
+				if selectedDecl == nil {
+					b, err := ioutil.ReadFile(name)
+					if err == nil {
+						code := string(b)
+						snippetMatches := snippetRegex.FindAllStringIndex(code, -1)
+						if snippetMatches != nil {
+							decl := selectDecl(selectedPkg, selectedFile, query.LineNumber, snippetMatches, MAX_DIST)
+							if decl != nil {
+								codeSlice := declCode(code, decl, parsedPkg.Fset)
+								if strings.Contains(codeSlice, query.Snippet) {
+									selectedDecl = decl
+									break
+								}
+							}
+						}
+					}
+				} else {
+					break
+				}
 			}
 		}
 	}
@@ -361,7 +626,7 @@ func GetCFG(query *base.CFGQuery, projectsDir string)  {
 		if !isCacheQuery {
 			panic("Could not find non-cache file.")
 		}
-		snippetRegex := regexp.MustCompile(regexp.QuoteMeta(query.Snippet))
+
 		// Try finding cache file based on file contents:
 		for _, parsedPkg := range parsedPkgs {
 			for i, file := range parsedPkg.Syntax {
@@ -374,13 +639,9 @@ func GetCFG(query *base.CFGQuery, projectsDir string)  {
 						if snippetMatches != nil {
 							selectedPkg = parsedPkg
 							selectedFile = file
-							decl := selectDecl(selectedPkg, selectedFile, query.LineNumber, snippetMatches)
+							decl := selectDecl(selectedPkg, selectedFile, query.LineNumber, snippetMatches, CACHE_MAX_DIST)
 							if decl != nil {
-								dStart := decl.Pos()
-								dEnd := decl.End()
-								startOffset := parsedPkg.Fset.File(dStart).Offset(dStart)
-								endOffset := parsedPkg.Fset.File(dEnd).Offset(dEnd)
-								codeSlice := code[startOffset:endOffset]
+								codeSlice := declCode(code, decl, parsedPkg.Fset)
 								if strings.Contains(codeSlice, query.Snippet) {
 									selectedDecl = decl
 									break
