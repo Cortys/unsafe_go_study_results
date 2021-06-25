@@ -301,15 +301,21 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 	paramIds := make([]int, 0)
 	resultIds := make([]int, 0)
 	cfgNames := make([]string, 0)
+	cfgDefs := make([]int, 0)
 	cfgPkg := -1
 
 	switch cdecl := decl.(type) {
 	case *ast.FuncDecl:
 		id := cdecl.Name
+		fId := -1
 		cfgNames = append(cfgNames, id.String())
 		if obj := pkg.TypesInfo.ObjectOf(id); obj != nil {
 			cfgPkg = pLookup(obj.Pkg())
+			if f, ok := obj.(*types.Func); ok {
+				fId = fLookup(f)
+			}
 		}
+		cfgDefs = append(cfgDefs, fId)
 
 		ft := cdecl.Type
 		params := ft.Params
@@ -346,21 +352,24 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 			c = cfg.FromFunc(cdecl)
 		} else {
 			cfgType = "external"
+			inIds := make([]int, len(paramIds) + len(recvIds))
+			inIds = append(inIds, recvIds...)
+			inIds = append(inIds, paramIds...)
 			cfgBlocks = []base.CFGBlock{{
-				Code: "entry",
+				Code: "[entry]",
 				Entry: true,
 				Exit: false,
 				LineStart: -1,
 				LineEnd: -1,
-				InVars: paramIds,
-				OutVars: paramIds,
+				InVars: inIds,
+				OutVars: inIds,
 				UseVars: []int{},
 				DeclVars: []int{},
 				AssignVars: []int{},
 				UpdateVars: []int{},
 				Succs: []int{1},
 			}, {
-				Code: "exit",
+				Code: "[exit]",
 				Entry: false,
 				Exit: true,
 				LineStart: -1,
@@ -375,47 +384,47 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 	case *ast.GenDecl:
 		switch cdecl.Tok {
 		case token.IMPORT:
-			cfgType = "import"
-			for _, s := range cdecl.Specs {
-				if id := s.(*ast.ImportSpec).Name; id != nil {
-					cfgNames = append(cfgNames, id.Name)
-					if cfgPkg == -1 {
-						if obj := pkg.TypesInfo.ObjectOf(id); obj != nil {
-							cfgPkg = pLookup(obj.Pkg())
-						}
-					}
-				}
-			}
+			panic("Cannot create CFG for import declaration.")
 		case token.TYPE:
 			cfgType = "type"
 			for _, s := range cdecl.Specs {
 				id := s.(*ast.TypeSpec).Name
+				tId := -1
 				cfgNames = append(cfgNames, id.Name)
-				if cfgPkg == -1 {
-					if obj := pkg.TypesInfo.ObjectOf(id); obj != nil {
+				if obj := pkg.TypesInfo.ObjectOf(id); obj != nil {
+					if cfgPkg == -1 {
 						cfgPkg = pLookup(obj.Pkg())
 					}
+					if t, ok := obj.(*types.TypeName); ok {
+						tId = tLookup(t.Type())
+					}
 				}
+				cfgDefs = append(cfgDefs, tId)
 			}
 		case token.VAR, token.CONST:
 			cfgType = "variable"
 			for _, s := range cdecl.Specs {
 				for _, id := range s.(*ast.ValueSpec).Names {
+					vId := -1
 					cfgNames = append(cfgNames, id.Name)
-					if cfgPkg == -1 {
-						if obj := pkg.TypesInfo.ObjectOf(id); obj != nil {
+					if obj := pkg.TypesInfo.ObjectOf(id); obj != nil {
+						if cfgPkg == -1 {
 							cfgPkg = pLookup(obj.Pkg())
 						}
+						if v, ok := obj.(*types.Var); ok {
+							vId = vLookup(v)
+						}
 					}
+					cfgDefs = append(cfgDefs, vId)
 				}
 			}
 		default:
-			cfgType = "generic"
+			panic("Unknown GenDecl token.")
 		}
 		declStmt := ast.DeclStmt{Decl: cdecl}
 		c = cfg.FromStmts([]ast.Stmt{&declStmt})
 	default:
-		cfgType = "unknown"
+		panic("Unknown declaration type.")
 	}
 
 	if c != nil {
@@ -515,6 +524,7 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 		Names: cfgNames,
 		Type: cfgType,
 		Pkg: cfgPkg,
+		Defines: cfgDefs,
 		Code: cfgCode,
 		LineStart: declPos.Line,
 		LineEnd: declEnd.Line,

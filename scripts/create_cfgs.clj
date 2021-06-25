@@ -16,6 +16,9 @@
                 :default "../labeled-usages-dataset"]
                ["-o" "--output OUT" "Output directory"
                 :default "../labeled-cfg-dataset"]
+               ["-f" "--filter FILTER" "Usages filter string"
+                :default nil]
+               ["-r" "--refresh" "Ignore existing CFGs." :default false]
                ["-b" "--binary BIN" "Geiger binary path"
                 :default "./data-acquisition-tool/data-acquisition-tool"]])
 
@@ -51,9 +54,9 @@
     false))
 
 (defn get-cfg
-  [{:keys [binary projects]} counter envs
+  [{:keys [binary projects refresh]} counter envs
    {:keys [pkg file line project dest source snippet] :as usage}]
-  (when-not (cfg-created? dest)
+  (when (or refresh (not (cfg-created? dest)))
     #_(locking *out* (println (swap! counter inc) "Skipping" source))
     (let [i (swap! counter inc)]
       (loop [[env & rest-envs] envs]
@@ -111,9 +114,14 @@
       processor (comp (partial write-cfg! options)
                       (partial get-cfg options counter envs)
                       (partial parse-usage options))
-      files (usage-files (:usages options))]
+      files (usage-files (:usages options))
+      file-filter (:filter options)
+      files (if-not (empty? file-filter)
+              (filter #(str/includes? % file-filter)
+                      files)
+              files)]
   (println "Using the following relevant go installations:")
   (doseq [root go-roots] (println "-" root))
-  (println "Processing usages...")
+  (println "Processing" (count files) "usages...")
   (doall (pmap processor files))
   (println "Done."))

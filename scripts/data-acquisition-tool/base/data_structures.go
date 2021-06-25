@@ -81,9 +81,10 @@ type CFGBlock struct {
 }
 
 type CFG struct {
-	Names        []string   `json:"name"`
+	Names        []string   `json:"names"`
 	Code         string     `json:"code"`
 	Pkg          int        `json:"package"`
+	Defines      []int      `json:"defines"`
 	LineStart    int        `json:"line-start"`
 	LineEnd      int        `json:"line-end"`
 	Type         string     `json:"type"`
