@@ -443,11 +443,11 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 			exit := false
 			switch block {
 			case c.Entry:
-				blockStr = "entry"
+				blockStr = "[entry]"
 				entry = true
 				lineStart, lineEnd = -1, -1
 			case c.Exit:
-				blockStr = "exit"
+				blockStr = "[exit]"
 				exit = true
 				lineStart, lineEnd = -1, -1
 			default:
