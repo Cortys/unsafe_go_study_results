@@ -55,6 +55,8 @@ type CFGVar struct {
 	Pkg          int        `json:"package"`
 	Type         int        `json:"type"`
 	Exported     bool       `json:"exported"`
+	Embedded     bool       `json:"embedded"`
+	Field        bool       `json:"field"`
 }
 
 type CFGFunc struct {

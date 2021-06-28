@@ -19,6 +19,7 @@
                ["-f" "--filter FILTER" "Usages filter string"
                 :default nil]
                ["-r" "--refresh" "Ignore existing CFGs." :default false]
+               ["-d" "--dry" "Only output geiger comamnds." :default false]
                ["-b" "--binary BIN" "Geiger binary path"
                 :default "./data-acquisition-tool/data-acquisition-tool"]])
 
@@ -54,7 +55,7 @@
     false))
 
 (defn get-cfg
-  [{:keys [binary projects refresh]} counter envs
+  [{:keys [binary projects refresh dry]} counter envs
    {:keys [pkg file line project dest source snippet] :as usage}]
   (when (or refresh (not (cfg-created? dest)))
     #_(locking *out* (println (swap! counter inc) "Skipping" source))
@@ -66,28 +67,30 @@
               args [binary "cfg" "--base" projects "--project" project
                     "--package" pkg "--file" file "--line" (str line)
                     "--dist" "0" "--cacheDist" "3" "--snippet" snippet]
-              {:keys [out exit]}
-              (sh/with-sh-env env (apply sh/sh args))
-              cfg (when (zero? exit) (cs/parse-string out true))
-              cfg (when cfg (walk/prewalk (fn [node]
-                                            (if (map? node)
-                                              (dissoc node :position)
-                                              node))
-                                          cfg))]
-           (if (empty? cfg)
-             (if (empty? rest-envs)
-               (locking *out*
-                 (println i j "WARNING: Could not create CFG:"
-                          (str/join " " (conj (pop args)
-                                              (str "\""
-                                                   (str/replace (last args) "\"" "\\\"")
-                                                   "\"")))))
-               (do
-                 (locking *out* (println i j "INFO: Go version fail."))
-                 (recur rest-envs)))
-             {:usage usage
-              :cfg (into (sorted-map) cfg)
-              :go-version (get go-versions (dec j))}))))))
+              cmd (str/join " " (conj (pop args)
+                                  (str "\""
+                                       (str/replace (last args) "\"" "\\\"")
+                                       "\"")))]
+          (if dry
+            (println cmd)
+            (let [{:keys [out exit]}
+                  (sh/with-sh-env env (apply sh/sh args))
+                  cfg (when (zero? exit) (cs/parse-string out true))
+                  cfg (when cfg (walk/prewalk (fn [node]
+                                                (if (map? node)
+                                                  (dissoc node :position)
+                                                  node))
+                                              cfg))]
+              (if (empty? cfg)
+                (if (empty? rest-envs)
+                  (locking *out*
+                    (println i j "WARNING: Could not create CFG:" cmd))
+                  (do
+                    (locking *out* (println i j "INFO: Go version fail."))
+                    (recur rest-envs)))
+                {:usage usage
+                 :cfg (into (sorted-map) cfg)
+                 :go-version (get go-versions (dec j))}))))))))
 
 (defn write-cfg!
   [_ cfg]

@@ -27,26 +27,30 @@ type CFGLookup struct {
 	Type func(types.Type) int
 	Var func(*types.Var) int
 	Func func(*types.Func) int
+	pkgList []base.CFGPkg
+	typeList []base.CFGType
+	varList []base.CFGVar
+	funcList []base.CFGFunc
 }
 
-func lookupPkg(lut *CFGLookup, pkgs []base.CFGPkg, pkgMap map[*types.Package]int, pkg *types.Package) ([]base.CFGPkg, int) {
+func lookupPkg(lut *CFGLookup, pkgMap map[*types.Package]int, pkg *types.Package) int {
 	var pkgId int = -1
 	if pkg != nil {
 		var ok bool
 		pkgId, ok = pkgMap[pkg]
 		if !ok {
-			pkgs = append(pkgs, base.CFGPkg{
+			lut.pkgList = append(lut.pkgList, base.CFGPkg{
 				Name: pkg.Name(),
 				Path: pkg.Path(),
 			})
-			pkgId = len(pkgs) - 1
+			pkgId = len(lut.pkgList) - 1
 			pkgMap[pkg] = pkgId
 		}
 	}
-	return pkgs, pkgId
+	return pkgId
 }
 
-func lookupType(lut *CFGLookup, ctypes []base.CFGType, typeMap map[string]int, typ types.Type) ([]base.CFGType, int) {
+func lookupType(lut *CFGLookup, typeMap map[string]int, typ types.Type) int {
 	var typeId int = -1
 	if typ != nil {
 		ts := typ.String()
@@ -54,14 +58,14 @@ func lookupType(lut *CFGLookup, ctypes []base.CFGType, typeMap map[string]int, t
 		typeId, ok = typeMap[ts]
 		if !ok {
 			var underId, elemId int
-			typeId = len(ctypes)
+			typeId = len(lut.typeList)
 			typeMap[ts] = typeId
 			ctyp := base.CFGType{}
-			ctypes = append(ctypes, ctyp)
+			lut.typeList = append(lut.typeList, ctyp)
 			switch t := typ.(type) {
 			case *types.Array:
 				ctyp["type"] = "Array"
-				ctypes, elemId = lookupType(lut, ctypes, typeMap, t.Elem())
+				elemId = lut.Type(t.Elem())
 				ctyp["elem"] = elemId
 			case *types.Basic:
 				ctyp["type"] = "Basic"
@@ -71,7 +75,7 @@ func lookupType(lut *CFGLookup, ctypes []base.CFGType, typeMap map[string]int, t
 				}
 			case *types.Chan:
 				ctyp["type"] = "Chan"
-				ctypes, elemId = lookupType(lut, ctypes, typeMap, t.Elem())
+				elemId = lut.Type(t.Elem())
 				ctyp["elem"] = elemId
 				ctyp["dir"] = goblin.DumpChanDir(goblin.ConvertChanDir(t.Dir()))
 			case *types.Interface:
@@ -80,7 +84,7 @@ func lookupType(lut *CFGLookup, ctypes []base.CFGType, typeMap map[string]int, t
 				for i := 0; i < t.NumMethods(); i++ {
 					m := t.Method(i)
 					var mtyp int
-					ctypes, mtyp = lookupType(lut, ctypes, typeMap, m.Type())
+					mtyp = lut.Type(m.Type())
 					methods[i] = map[string]interface{}{
 						"name": m.Name(),
 						"type": mtyp,
@@ -89,9 +93,9 @@ func lookupType(lut *CFGLookup, ctypes []base.CFGType, typeMap map[string]int, t
 				ctyp["methods"] = methods
 			case *types.Map:
 				ctyp["type"] = "Map"
-				ctypes, elemId = lookupType(lut, ctypes, typeMap, t.Elem())
+				elemId = lut.Type(t.Elem())
 				ctyp["elem"] = elemId
-				ctypes, elemId = lookupType(lut, ctypes, typeMap, t.Key())
+				elemId = lut.Type(t.Key())
 				ctyp["key"] = elemId
 			case *types.Named:
 				ctyp["type"] = "Named"
@@ -101,20 +105,20 @@ func lookupType(lut *CFGLookup, ctypes []base.CFGType, typeMap map[string]int, t
 				}
 			case *types.Pointer:
 				ctyp["type"] = "Pointer"
-				ctypes, elemId = lookupType(lut, ctypes, typeMap, t.Elem())
+				elemId = lut.Type(t.Elem())
 				ctyp["elem"] = elemId
 			case *types.Signature:
 				ctyp["type"] = "Signature"
 				var params, res int
-				ctypes, params = lookupType(lut, ctypes, typeMap, t.Params())
-				ctypes, res = lookupType(lut, ctypes, typeMap, t.Results())
+				params = lut.Type(t.Params())
+				res = lut.Type(t.Results())
 				ctyp["params"] = params
 				ctyp["recv"] = lut.Var(t.Recv())
 				ctyp["results"] = res
 				ctyp["variadic"] = t.Variadic()
 			case *types.Slice:
 				ctyp["type"] = "Slice"
-				ctypes, elemId = lookupType(lut, ctypes, typeMap, t.Elem())
+				elemId = lut.Type(t.Elem())
 				ctyp["elem"] = elemId
 			case *types.Struct:
 				ctyp["type"] = "Struct"
@@ -122,7 +126,7 @@ func lookupType(lut *CFGLookup, ctypes []base.CFGType, typeMap map[string]int, t
 				for i := 0; i < t.NumFields(); i++ {
 					f := t.Field(i)
 					var ftyp int
-					ctypes, ftyp = lookupType(lut, ctypes, typeMap, f.Type())
+					ftyp = lut.Type(f.Type())
 					fields[i] = map[string]interface{}{
 						"name": f.Name(),
 						"type": ftyp,
@@ -135,7 +139,7 @@ func lookupType(lut *CFGLookup, ctypes []base.CFGType, typeMap map[string]int, t
 				for i := 0; i < t.Len(); i++ {
 					f := t.At(i)
 					var ftyp int
-					ctypes, ftyp = lookupType(lut, ctypes, typeMap, f.Type())
+					ftyp = lut.Type(f.Type())
 					fields[i] = map[string]interface{}{
 						"name": f.Name(),
 						"type": ftyp,
@@ -145,49 +149,51 @@ func lookupType(lut *CFGLookup, ctypes []base.CFGType, typeMap map[string]int, t
 			default:
 			}
 			ctyp["name"] = typ.String()
-			ctypes, underId = lookupType(lut, ctypes, typeMap, typ.Underlying())
+			underId = lut.Type(typ.Underlying())
 			ctyp["underlying"] = underId
 		}
 	}
-	return ctypes, typeId
+	return typeId
 }
 
-func lookupVar(lut *CFGLookup, vars []base.CFGVar, varMap map[*types.Var]int, v *types.Var) ([]base.CFGVar, int) {
+func lookupVar(lut *CFGLookup, varMap map[*types.Var]int, v *types.Var) int {
 	var varId int = -1
 	if v != nil {
 		var ok bool
 		varId, ok = varMap[v]
 		if !ok {
-			vars = append(vars, base.CFGVar{
+			lut.varList = append(lut.varList, base.CFGVar{
 				Name: v.Name(),
 				Pkg: lut.Pkg(v.Pkg()),
 				Type: lut.Type(v.Type()),
 				Exported: v.Exported(),
+				Embedded: v.Embedded(),
+				Field: v.IsField(),
 			})
-			varId = len(vars) - 1
+			varId = len(lut.varList) - 1
 			varMap[v] = varId
 		}
 	}
-	return vars, varId
+	return varId
 }
 
-func lookupFunc(lut *CFGLookup, funcs []base.CFGFunc, funcMap map[*types.Func]int, f *types.Func) ([]base.CFGFunc, int) {
+func lookupFunc(lut *CFGLookup, funcMap map[*types.Func]int, f *types.Func) int {
 	var funcId int = -1
 	if f != nil {
 		var ok bool
 		funcId, ok = funcMap[f]
 		if !ok {
-			funcs = append(funcs, base.CFGFunc{
+			lut.funcList = append(lut.funcList, base.CFGFunc{
 				Name: f.Name(),
 				Pkg: lut.Pkg(f.Pkg()),
 				Type: lut.Type(f.Type()),
 				Exported: f.Exported(),
 			})
-			funcId = len(funcs) - 1
+			funcId = len(lut.funcList) - 1
 			funcMap[f] = funcId
 		}
 	}
-	return funcs, funcId
+	return funcId
 }
 
 func makeBlockAst(block ast.Stmt, fset *token.FileSet, c *cfg.CFG) interface{} {
@@ -253,10 +259,6 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 		Info: *pkg.TypesInfo,
 	}
 	fset := pkg.Fset
-	cvars := make([]base.CFGVar, 0)
-	ctypes := make([]base.CFGType, 0)
-	cpkgs := make([]base.CFGPkg, 0)
-	cfuncs := make([]base.CFGFunc, 0)
 	varMap := make(map[*types.Var]int)
 	typeMap := make(map[string]int, 0)
 	pkgMap := make(map[*types.Package]int, 0)
@@ -264,29 +266,25 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 	lookup := &CFGLookup{}
 
 	vLookup := func(v *types.Var) int {
-		cv, typeId := lookupVar(lookup, cvars, varMap, v)
-		cvars = cv
-		return typeId
+		return lookupVar(lookup, varMap, v)
 	}
 	pLookup := func(pkg *types.Package) int {
-		cp, pkgId := lookupPkg(lookup, cpkgs, pkgMap, pkg)
-		cpkgs = cp
-		return pkgId
+		return lookupPkg(lookup, pkgMap, pkg)
 	}
 	tLookup := func(typ types.Type) int {
-		ct, typeId := lookupType(lookup, ctypes, typeMap, typ)
-		ctypes = ct
-		return typeId
+		return lookupType(lookup, typeMap, typ)
 	}
 	fLookup := func(f *types.Func) int {
-		cf, funcId := lookupFunc(lookup, cfuncs, funcMap, f)
-		cfuncs = cf
-		return funcId
+		return lookupFunc(lookup, funcMap, f)
 	}
 	lookup.Var = vLookup
 	lookup.Pkg = pLookup
 	lookup.Type = tLookup
 	lookup.Func = fLookup
+	lookup.varList = make([]base.CFGVar, 0)
+	lookup.pkgList = make([]base.CFGPkg, 0)
+	lookup.typeList = make([]base.CFGType, 0)
+	lookup.funcList = make([]base.CFGFunc, 0)
 
 	goblin.SetTypesInfo(pkg.TypesInfo)
 	goblin.SetVarDumper(func(v *types.Var) interface{} {return vLookup(v)})
@@ -529,10 +527,10 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 		LineStart: declPos.Line,
 		LineEnd: declEnd.Line,
 		Blocks: cfgBlocks,
-		Variables: cvars,
-		Types: ctypes,
-		Pkgs: cpkgs,
-		Funcs: cfuncs,
+		Variables: lookup.varList,
+		Types: lookup.typeList,
+		Pkgs: lookup.pkgList,
+		Funcs: lookup.funcList,
 		Receivers: recvIds,
 		Params: paramIds,
 		Results: resultIds,
