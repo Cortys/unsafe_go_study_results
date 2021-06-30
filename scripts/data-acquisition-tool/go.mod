@@ -3,7 +3,7 @@ module github.com/stg-tud/unsafe_go_study_results/scripts/data-acquisition-tool
 go 1.14
 
 require (
-	github.com/Cortys/goblin v0.3.4-0.20210624170404-f4433dfd22bb
+	github.com/Cortys/goblin v0.3.4-0.20210630130824-b58ea5b0be3d
 	github.com/go-git/go-git/v5 v5.0.0
 	github.com/gocarina/gocsv v0.0.0-20200330101823-46266ca37bd3
 	github.com/godoctor/godoctor v0.0.0-20200702010311-8433dcb3dc61
