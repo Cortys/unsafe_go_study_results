@@ -504,7 +504,6 @@ func printCFG(f io.Writer, decl ast.Decl, pkg *packages.Package) {
 		for i, block := range blocks {
 			succs := c.Succs(block)
 			cfgSuccs := make([]int, len(succs))
-			c.Sort(succs)
 			for j, succ := range succs {
 				cfgSuccs[j] = blockToId[succ]
 			}
