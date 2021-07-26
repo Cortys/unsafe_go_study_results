@@ -54,6 +54,16 @@ func lookupType(lut *CFGLookup, typeMap map[string]int, typ types.Type) int {
 	var typeId int = -1
 	if typ != nil {
 		ts := typ.String()
+
+		switch t := typ.(type) {
+		case *types.Signature:
+			recv := t.Recv()
+			if recv != nil {
+				rs := recv.Type().String()
+				ts = fmt.Sprintf("(%s) %s", rs, ts)
+			}
+		}
+
 		var ok bool
 		typeId, ok = typeMap[ts]
 		if !ok {
@@ -148,7 +158,7 @@ func lookupType(lut *CFGLookup, typeMap map[string]int, typ types.Type) int {
 				ctyp["fields"] = fields
 			default:
 			}
-			ctyp["name"] = typ.String()
+			ctyp["name"] = ts
 			underId = lut.Type(typ.Underlying())
 			ctyp["underlying"] = underId
 		}
