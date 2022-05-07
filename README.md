@@ -1,6 +1,6 @@
 # Data Set: Finding Unsafe Go Code in the Wild
 
-This is a fork of [stg-tud/unsafe_go_study_results](https://github.com/stg-tud/unsafe_go_study_results) which adds a [CFG generator](./scripts/data-acquisition-tool/cfg/cfg.go) the the data-acquisition-tool.
+This is a fork of [stg-tud/unsafe_go_study_results](https://github.com/stg-tud/unsafe_go_study_results) which adds a [CFG generator](./scripts/data-acquisition-tool/cfg/cfg.go) to the data-acquisition-tool.
 
 The CFGs created for the unsafe usage dataset in [`labeled-usages-dataset`](./labeled-usages-dataset/) can be found in [`labeled-cfg-dataset`](./labeled-cfg-dataset/).
 
